@@ -35,20 +35,53 @@ def get_edges_with_schedule(schedule):
     return es
 
 def get_edges_for_stop(all_edges, stop):
-    return [edge for edge in all_edges if edge.origin.stop_id == stop.stop_id]
+    es = []
+    i = 0
+    while i < len(all_edges):
+        edge = all_edges[i]
+        if edge.origin.stop_id == stop.stop_id:
+            es.append(edge)
+            all_edges.pop(i)
+        else:
+            i+=1
+    return es
 
+def get_parent_stop_id(stop_id):
+    if stop_id[-1] in ('N', 'S'):
+        return stop_id[0:-1]
+    else:
+        return stop_id
 
 def getSchedule():
     schedule = transitfeed.Schedule()
     schedule.Load(DATA_FILENAME)
     return schedule
 
+def build_edge_index(stops, edges):
+    stops_and_edges = {}
+
+    for stop in stops:
+        parent_stop = get_parent_stop_id(stop.stop_id)
+        if stops_and_edges.has_key(parent_stop):
+            stops_and_edges[parent_stop] += get_edges_for_stop(edges, stop)
+        else:
+            stops_and_edges[parent_stop] = get_edges_for_stop(edges, stop)
+
+    print len(stops_and_edges)
+    return stops_and_edges
+
 def main():
     s = getSchedule()
 
     stops = s.stops.values()
     edges = get_edges_with_schedule(s)
+    stop_edge_map = build_edge_index(stops, edges)
+    nodes = [stop for stop in stops if not stop.stop_id[-1] in ('N', 'S')]
+
 
 
 if __name__ == '__main__':
+    import time
+    start_time = time.time()
     main()
+    print("--- %s seconds ---" % (time.time() - start_time))

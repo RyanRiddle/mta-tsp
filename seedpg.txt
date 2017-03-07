@@ -1,0 +1,78 @@
+// install postgres and run in background
+sudo apt-get install postgresql postgresql-contrib
+postgres -D /usr/local/pgsql/data >logfile 2>&1 &
+
+
+// install pgadmin3 GUI
+sudo apt install pgadmin3
+
+// connect to postgres with psql
+sudo -u postgres psql postgres
+
+// for pgadmin access
+alter user postgres with password 'postgres';
+
+
+CREATE DATABASE mta_gtfs
+  WITH OWNER = postgres
+       ENCODING = 'UTF8'
+       TABLESPACE = pg_default
+       LC_COLLATE = 'en_CA.UTF-8'
+       LC_CTYPE = 'en_CA.UTF-8'
+       CONNECTION LIMIT = -1;
+
+\connect mta_gtfs
+
+CREATE TABLE stop_times (
+trip_id text,
+arrival_time text,
+departure_time text,
+stop_id text,
+stop_sequence integer,
+stop_headsign text,
+pickup_type integer,
+drop_off_type integer,
+shape_dist_traveled text
+);
+
+\copy stop_times FROM './data/stop_times.txt' DELIMITER ',' CSV HEADER;
+
+CREATE TABLE stops (
+stop_id text,
+stop_code text,
+stop_name text,
+stop_desc text,
+stop_lat double precision,
+stop_lon double precision,
+zone_id text,
+stop_url text,
+location_type integer,
+parent_station text
+);
+
+\copy stops FROM './data/stops.txt' DELIMITER ',' CSV HEADER;
+
+
+CREATE TABLE routes (
+route_id text,
+agency_id text,
+route_short_name text,
+route_long_name text,
+route_desc text,
+route_type integer,
+route_url text,
+route_color char(6),
+route_text_color char(6)
+);
+
+\copy routes FROM './data/routes.txt' DELIMITER ',' CSV HEADER;
+
+
+SELECT a.stop_id as origin, b.stop_id as dest
+FROM stop_times as a
+JOIN stop_times as b
+ON a.trip_id = b.trip_id
+WHERE a.stop_sequence = b.stop_sequence - 1
+
+
+SELECT trip_id, count(*) from stop_times group by trip_id

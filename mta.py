@@ -1,11 +1,19 @@
 import itertools
+import transitfeed
+
+DATA_FILENAME = './data/google_transit.zip'
+SERVICE_PERIODS = [
+    u"A20161106WKD",
+    u"B20161106WKD",
+    u"R20161106WKD"
+]
 
 class Edge(object):
     def __init__(self, origin, destination):
         self.origin = origin
         self.destination = destination
 
-def get_edges_with_trip(trip):
+def build_edges_from_trip(trip):
     stop_times = trip.GetStopTimes()
 
     edges = []
@@ -19,14 +27,28 @@ def get_edges_with_trip(trip):
 
     return edges
 
-def get_trips_with_schedule(schedule):
-    services = [u"A20161106WKD", u"B20161106WKD", u"R20161106WKD"]
-    trips = schedule.trips.values()
-    return [trip for trip in trips if trip.service_id in services]
-
 def get_edges_with_schedule(schedule):
-    trips = get_trips_with_schedule(schedule)
-    aa = [get_edges_with_trip(trip) for trip in trips]
+    trips = [t for t in schedule.trips.values() if t.service_id in SERVICE_PERIODS]
+    edges_per_trip = [build_edges_from_trip(trip) for trip in trips]
 
-    edges = [edge for a in aa for edge in a]
-    return edges
+    es = [e for edges in edges_per_trip for e in edges]
+    return es
+
+def get_edges_for_stop(all_edges, stop):
+    return [edge for edge in all_edges if edge.origin.stop_id == stop.stop_id]
+
+
+def getSchedule():
+    schedule = transitfeed.Schedule()
+    schedule.Load(DATA_FILENAME)
+    return schedule
+
+def main():
+    s = getSchedule()
+
+    stops = s.stops.values()
+    edges = get_edges_with_schedule(s)
+
+
+if __name__ == '__main__':
+    main()

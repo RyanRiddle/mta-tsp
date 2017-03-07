@@ -14,7 +14,7 @@ def get_edges_with_trip(trip):
         time = stop_times[i]
         next_time = stop_times[i+1]
 
-        edge = Edge(time.stop_id, next_time.stop_id)
+        edge = Edge(time, next_time)
         edges.append(edge)
 
     return edges

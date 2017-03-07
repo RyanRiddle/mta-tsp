@@ -38,6 +38,20 @@ def get_edges_for_stop(all_edges, stop):
     return [edge for edge in all_edges if edge.origin.stop_id == stop.stop_id]
 
 
+def build_edges_for_stop(stop, schedule):
+    trips = [t for t in schedule.trips.values() if t.service_id in SERVICE_PERIODS]
+    for t in trips:
+        stop_times = t.GetStopTimes()
+        edges = []
+    # stop_times seems to be sorted by sequence_num already
+    for i in range(len(stop_times) - 1):
+        if stop_times[i].stop_id == stop.stop_id:
+            next_time = stop_times[i+1]
+            edge = Edge(stop_times[i], next_time)
+            edges.append(edge)
+
+    return edges
+
 def getSchedule():
     schedule = transitfeed.Schedule()
     schedule.Load(DATA_FILENAME)
@@ -52,8 +66,8 @@ def main():
     stops_and_edges = {}
 
     for stop in stops:
-        stops_and_edges[stop.stop_id] = get_edges_for_stop(edges, stop)
-
+        build_edges_for_stop(stop, schedule)
+        stops_and_edges[stop.stop_id] = build_edges_for_stop(stop, schedule)
     print len(stops_and_edges)
 
 

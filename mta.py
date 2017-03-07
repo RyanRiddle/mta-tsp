@@ -1,4 +1,4 @@
-import itertools
+from datetime import datetime
 import transitfeed
 
 DATA_FILENAME = './data/google_transit.zip'
@@ -8,11 +8,16 @@ SERVICE_PERIODS = [
     u"R20161106WKD"
 ]
 
+def time(time_string):
+    time_string = time_string.replace(':', '')
+    return int(time_string)
+
 class Edge(object):
     def __init__(self, origin, destination):
         self.origin = origin
         self.destination = destination
-        self.weight = this.destination.arrival_time - this.origin.departure_time
+        self.weight = time(destination.arrival_time) - time(origin.departure_time)
+
 
 def build_edges_from_trip(trip):
     stop_times = trip.GetStopTimes()
@@ -72,7 +77,7 @@ def build_edge_index(stops, edges):
     return stops_and_edges
 
 def isChildStop(stop):
-    stop.stop_id[-1] in ('N', 'S')
+    return stop.stop_id[-1] in (u'N', u'S')
 
 def main():
     s = getSchedule()
@@ -82,27 +87,41 @@ def main():
     stop_edge_map = build_edge_index(stops, edges)
     nodes = [stop for stop in stops if not isChildStop(stop) ]
 
-    current = nodes[0]
-    visited = [current.stop_id]
-    visited_edges = []
-    unique_visited = [current.stop_id]
+    return s, nodes, stop_edge_map
 
-    while (len(unique_visited) < len(nodes)):
-        es = sorted(stop_edge_map[current.stop_id], key=Edge.weight)
-        current_edges = es.remove(visited_edges[-1])
+def nn(s, nodes, stop_edge_map):
+    current = nodes[0].stop_id
+    visited = [current]
+    backtrack_list = []
+    skip_bt = True
 
-        unvisited_edges = [edge for edge in current_edges if not edge.destination.stop_id in visited]
+    while (len(visited) < len(nodes)):
+        print current
+
+        current_edges = sorted(stop_edge_map[current], key=lambda edge: edge.weight)
+
+        unvisited_edges = [edge for edge in current_edges if not get_parent_stop_id(edge.destination.stop_id) in visited]
 
         if (len(unvisited_edges) > 0):
             shortest_edge = unvisited_edges[0]
-            visited.append(shortest_edge.destination.stop_id)
-            unique_visited.append(shortest_edge.destination.stop_id)
-            visited_edges.append(shortest_edge)
+            current = get_parent_stop_id(shortest_edge.destination.stop_id)
+            visited.append(current)
+    
+            backtrack_list = []
+            skip_bt = True
         else:
             # find shortest edge back
-            shortest_edge = current_edges[0]
-            visited.append(shortest_edge.destination.stop_id)
-            visited_edges.append(shortest_edge)
+            unbacktracked_edges = [edge for edge in current_edges if not get_parent_stop_id(edge.destination.stop_id) in backtrack_list]
+            if len(unbacktracked_edges) == 0:
+                print backtrack_list
+            shortest_edge = unbacktracked_edges[0]
+        
+            #if not skip_bt:
+            backtrack_list.append(current)
+            #else:
+                #skip_bt = False
+            current = get_parent_stop_id(shortest_edge.destination.stop_id)
+
 
     print visited
 
@@ -110,5 +129,6 @@ def main():
 if __name__ == '__main__':
     import time
     start_time = time.time()
-    main()
+    s, nodes, stop_edge_map = main()
+    nn(s, nodes, stop_edge_map) 
     print("--- %s seconds ---" % (time.time() - start_time))

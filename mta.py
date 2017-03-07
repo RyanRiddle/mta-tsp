@@ -12,6 +12,7 @@ class Edge(object):
     def __init__(self, origin, destination):
         self.origin = origin
         self.destination = destination
+        self.weight = this.destination.arrival_time - this.origin.departure_time
 
 def build_edges_from_trip(trip):
     stop_times = trip.GetStopTimes()
@@ -70,14 +71,40 @@ def build_edge_index(stops, edges):
     print len(stops_and_edges)
     return stops_and_edges
 
+def isChildStop(stop):
+    stop.stop_id[-1] in ('N', 'S')
+
 def main():
     s = getSchedule()
 
     stops = s.stops.values()
     edges = get_edges_with_schedule(s)
     stop_edge_map = build_edge_index(stops, edges)
-    nodes = [stop for stop in stops if not stop.stop_id[-1] in ('N', 'S')]
+    nodes = [stop for stop in stops if not isChildStop(stop) ]
 
+    current = nodes[0]
+    visited = [current.stop_id]
+    visited_edges = []
+    unique_visited = [current.stop_id]
+
+    while (len(unique_visited) < len(nodes)):
+        es = sorted(stop_edge_map[current.stop_id], key=Edge.weight)
+        current_edges = es.remove(visited_edges[-1])
+
+        unvisited_edges = [edge for edge in current_edges if not edge.destination.stop_id in visited]
+
+        if (len(unvisited_edges) > 0):
+            shortest_edge = unvisited_edges[0]
+            visited.append(shortest_edge.destination.stop_id)
+            unique_visited.append(shortest_edge.destination.stop_id)
+            visited_edges.append(shortest_edge)
+        else:
+            # find shortest edge back
+            shortest_edge = current_edges[0]
+            visited.append(shortest_edge.destination.stop_id)
+            visited_edges.append(shortest_edge)
+
+    print visited
 
 
 if __name__ == '__main__':

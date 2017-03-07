@@ -67,7 +67,19 @@ route_text_color char(6)
 
 \copy routes FROM './data/routes.txt' DELIMITER ',' CSV HEADER;
 
+CREATE TABLE trips (
+route_id text,
+service_id text,
+trip_id text,
+trip_headsign text,
+direction_id integer,
+block_id text,
+shape_id text
+);
 
+\copy trips FROM './data/trips.txt' DELIMITER ',' CSV HEADER;
+
+// pairs of stops in a trip
 SELECT a.stop_id as origin, b.stop_id as dest
 FROM stop_times as a
 JOIN stop_times as b
@@ -76,3 +88,9 @@ WHERE a.stop_sequence = b.stop_sequence - 1
 
 
 SELECT trip_id, count(*) from stop_times group by trip_id
+
+SELECT st.stop_id, COUNT(DISTINCT t.route_id)
+FROM trips as t
+JOIN stop_times as st
+ON t.trip_id = st.trip_id
+GROUP BY st.stop_id

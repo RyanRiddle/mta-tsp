@@ -35,7 +35,16 @@ def get_edges_with_schedule(schedule):
     return es
 
 def get_edges_for_stop(all_edges, stop):
-    return [edge for edge in all_edges if edge.origin.stop_id == stop.stop_id]
+    es = []
+    i = 0
+    while i < len(all_edges):
+        edge = all_edges[i]
+        if edge.origin.stop_id == stop.stop_id:
+            es.append(edge)
+            all_edges.pop(i)
+        else:
+            i+=1
+    return es
 
 
 def getSchedule():

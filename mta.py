@@ -1,4 +1,4 @@
-from datetime import datetime
+import sys
 import transitfeed
 
 DATA_FILENAME = './data/google_transit.zip'
@@ -89,6 +89,56 @@ def main():
 
     return s, nodes, stop_edge_map
 
+def dijkstra(stop_ids, stop_edge_map, source):
+    dist = {}
+    prev = {}
+    Q = []
+
+    dist[source] = 0
+    prev[source] = None
+    for stop_id in stop_ids:
+        if not stop_id == source:
+            dist[stop_id] = sys.maxint     # infinity
+            prev[stop_id] = None
+        Q.append((stop_id, dist[stop_id]))
+
+    sorted_Q = Q        #will sort later
+    while len(sorted_Q) > 0:
+        sorted_Q = sorted(sorted_Q, key=lambda x: x[1])
+        curr = sorted_Q.pop(0)[0]
+
+        for edge in stop_edge_map[curr]:
+            neighbor = get_parent_stop_id(edge.destination.stop_id)
+            alt = dist[curr] + edge.weight
+            if alt < dist[neighbor]:
+                dist[neighbor] = alt
+                prev[neighbor] = curr
+
+                i = [i for i, t in enumerate(sorted_Q) if t[0] == neighbor][0]
+                sorted_Q[i] = (neighbor, alt)
+
+    return dist, prev
+        
+def path_to_nearest_unvisited_stop(nodes, stop_edge_map, visited, source):
+    stop_ids = [node.stop_id for node in nodes]
+    dist, prev = dijkstra(stop_ids, stop_edge_map, source)
+
+    unvisited = [stop_id for stop_id in stop_ids if not stop_id in visited]
+    min_unvisited = unvisited[0]
+    min_dist = sys.maxint
+    for stop in unvisited:
+        if dist[stop] < min_dist:
+            min_unvisited = stop
+            min_dist = dist[stop]
+
+    curr = min_unvisited
+    path = [curr]
+    while prev[curr]:
+        curr = prev[curr]
+        path.insert(0, curr)
+        
+    return path
+
 def _dfs(node, stop_edge_map, visited):
     print node
     visited.append(node)
@@ -113,38 +163,26 @@ def dfs(nodes, stop_edge_map):
 def nn(s, nodes, stop_edge_map):
     current = nodes[0].stop_id
     visited = [current]
-    backtrack_list = []
-    skip_bt = True
+    path = [current]
 
     while (len(visited) < len(nodes)):
-        print current
-
         current_edges = sorted(stop_edge_map[current], key=lambda edge: edge.weight)
-
         unvisited_edges = [edge for edge in current_edges if not get_parent_stop_id(edge.destination.stop_id) in visited]
 
         if (len(unvisited_edges) > 0):
             shortest_edge = unvisited_edges[0]
             current = get_parent_stop_id(shortest_edge.destination.stop_id)
-            visited.append(current)
-    
-            backtrack_list = []
-            skip_bt = True
         else:
-            # find shortest edge back
-            unbacktracked_edges = [edge for edge in current_edges if not get_parent_stop_id(edge.destination.stop_id) in backtrack_list]
-            if len(unbacktracked_edges) == 0:
-                print backtrack_list
-            shortest_edge = unbacktracked_edges[0]
-        
-            #if not skip_bt:
-            backtrack_list.append(current)
-            #else:
-                #skip_bt = False
-            current = get_parent_stop_id(shortest_edge.destination.stop_id)
+            path_to_nearest = path_to_nearest_unvisited_stop(nodes,
+                                 stop_edge_map, visited, 
+                                 current)
+            current = path_to_nearest.pop()
+            path += path_to_nearest
 
+        visited.append(current)
+        path.append(current)
 
-    print visited
+    return path
 
 
 if __name__ == '__main__':

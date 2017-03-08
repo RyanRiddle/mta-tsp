@@ -89,6 +89,27 @@ def main():
 
     return s, nodes, stop_edge_map
 
+def _dfs(node, stop_edge_map, visited):
+    print node
+    visited.append(node)
+    current_edges = sorted(stop_edge_map[node], key=lambda edge: edge.weight)
+
+    for neighbor in current_edges:
+        stop = get_parent_stop_id(neighbor.destination.stop_id)
+        if not stop in visited:
+            visited = _dfs(stop, stop_edge_map, visited)
+
+    return visited
+    
+def dfs(nodes, stop_edge_map):
+    visited = []
+
+    while len(visited) < len(nodes):
+        stop = [node.stop_id for node in nodes if not node.stop_id in visited][0]
+        visited = _dfs(stop, stop_edge_map, visited) 
+
+    return visited
+
 def nn(s, nodes, stop_edge_map):
     current = nodes[0].stop_id
     visited = [current]

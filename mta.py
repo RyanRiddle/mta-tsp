@@ -184,10 +184,36 @@ def nn(s, nodes, stop_edge_map):
 
     return path
 
-
-if __name__ == '__main__':
+def benchmark():
     import time
     start_time = time.time()
     s, nodes, stop_edge_map = main()
     nn(s, nodes, stop_edge_map) 
     print("--- %s seconds ---" % (time.time() - start_time))
+
+def get_stop(stops, stop_id):
+    for stop in stops:
+        if stop.stop_id == stop_id:
+            return stop
+
+    return None
+
+def visualize(nodes, path, old_schedule):
+    new_schedule = transitfeed.Schedule()
+    path = set(path)
+    for stop in path:
+        stop = get_stop(nodes, stop)
+        stop._schedule = None
+        new_schedule.AddStopObject(stop)
+
+    new_schedule.WriteGoogleTransitFeed("nn_path.zip")
+
+    for stop in path:
+        stop = get_stop(nodes, stop)
+        stop._schedule = old_schedule
+    
+if __name__ == '__main__':
+    s, nodes, stop_edge_map = main()
+    path = nn(s, nodes, stop_edge_map)
+
+    visualize(nodes, path, s)

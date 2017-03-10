@@ -1,4 +1,5 @@
 import sys
+import heapq
 import transitfeed
 
 DATA_FILENAME = './data/google_transit.zip'
@@ -22,8 +23,17 @@ class Edge(object):
         self.depart_at = depart_at
         self.arrive_at = arrive_at
 
-    def compute_weight(current_time):
-        return self.arrive_at - current_time
+    def get_arrival_time(self, current_time):
+        if self.depart_at == ANYTIME:
+            return current_time + self.arrive_at
+        else:
+            return self.arrive_at
+
+    def get_departure_time(self, current_time):
+        if self.depart_at == ANYTIME:
+            return current_time
+        else:
+            return self.depart_at
 
 def get_transfers_from_schedule(schedule):
     transfers_ll = schedule._transfers.values()
@@ -161,39 +171,48 @@ def main():
 
     return schedule, nodes, stop_edge_map
 
-def dijkstra(stop_ids, stop_edge_map, source, time):
-    dist = {}
+def get_edges_after_time(edges, time):
+    return [edge for edge in edges if edge.depart_at >= time]
+
+def decrease_key(Q, time_and_node):
+    # hack to find element 
+    indices = [i for i, el in enumerate(Q) if el[1] == time_and_node[1]]
+    if len(indices) > 0:
+        i = indices[0] 
+        Q[i] = time_and_node
+    else:
+        heapq.heappush(Q, time_and_node)
+    
+    return Q 
+
+def dijkstra(stop_ids, stop_edge_map, source, source_arrive_time):
+    INFINITY = sys.maxint
+    arrival_time = {}
     prev = {}
     Q = []
 
-    dist[source] = 0
-    prev[source] = (None, None)
+    arrival_time[source] = source_arrive_time
+    prev[source] = None
     for stop_id in stop_ids:
         if not stop_id == source:
-            dist[stop_id] = sys.maxint     # infinity
-            prev[stop_id] = (None, None)
-        Q.append((stop_id, time, dist[stop_id]))
+            arrival_time[stop_id] = INFINITY
+            prev[stop_id] = None
+        heapq.heappush(Q, (arrival_time[stop_id], stop_id))
 
-    sorted_Q = Q        #will sort later
-    while len(sorted_Q) > 0:
-        sorted_Q = sorted(sorted_Q, key=lambda x: x[2])
-        tup = sorted_Q.pop(0)
-        curr = tup[0]
-        time = tup[1]
+    while len(Q) > 0:
+        arrive_at_curr, curr = heapq.heappop(Q)
 
-        for edges in stop_edge_map[curr].values():
-            for edge in edges:
-                neighbor = get_parent_stop_id(edge.destination.stop_id)
-                t = edge.get_arrival_time(time)
-                alt = dist[curr] + edge.weight + abs(time - t)
-                if alt < dist[neighbor]:
-                    dist[neighbor] = alt
-                    prev[neighbor] = (curr, time)
+        edges = get_edges_after_time(stop_edge_map[curr], arrive_at_curr)
+        for edge in edges:
+            neighbor = edge.destination.stop_id
+            arrive_at_neighbor = edge.get_arrival_time(arrive_at_curr)
+            
+            if arrive_at_neighbor < arrival_time[neighbor]:
+                arrival_time[neighbor] = arrive_at_neighbor
+                prev[neighbor] = curr
+                Q = decrease_key(Q, (arrive_at_neighbor, neighbor))
 
-                    i = [i for i, tup in enumerate(sorted_Q) if tup[0] == neighbor][0]
-                    sorted_Q[i] = (neighbor, t, alt)
-
-    return dist, prev
+    return arrival_time, prev
         
 def path_to_nearest_unvisited_stop(nodes, stop_edge_map, visited, source, time):
     min_unvisited = None

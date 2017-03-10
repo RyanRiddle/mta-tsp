@@ -9,114 +9,75 @@ SERVICE_PERIODS = [
 ]
 ANYTIME = 999999
 
-def convert_time(time_string):
-    time_string = time_string.replace(':', '')
-    return int(time_string)
+def seconds_past_midnight(time_string):
+    time_parts = [int(piece) for piece in time_string.split(":")]
+    seconds_per_part = [3600, 60, 1]
+    return reduce(lambda a, b: a + b, 
+                    [a * b for a, b in zip(time_parts, seconds_per_part)])
 
 class Edge(object):
-    def __init__(self, origin, destination, weight=None):
+    def __init__(self, origin, destination, depart_at, arrive_at):
         self.origin = origin
         self.destination = destination
-        if weight is None:
-            self.weight = convert_time(destination.arrival_time) - convert_time(origin.departure_time)
-            self.is_transfer = False
-        else:
-            self.weight = weight
-            self.is_transfer = True
+        self.depart_at = depart_at
+        self.arrive_at = arrive_at
 
-    def get_departure_time(self, current_time):
-        if self.is_transfer:
-            return current_time
-        else:
-            return convert_time(self.origin.departure_time)
-
-    def get_arrival_time(self, current_time):
-        if self.is_transfer:
-            return current_time + self.weight
-        else:
-            return convert_time(self.destination.arrival_time)
-
-def seconds_to_weird_time(seconds):
-    seconds_to_time = {}
-    seconds_to_time[0] = 0
-    seconds_to_time[90] = 130
-    seconds_to_time[120] = 200
-    seconds_to_time[180] = 300
-    seconds_to_time[300] = 600
-
-    assert seconds in seconds_to_time
-
-    return seconds_to_time[seconds]
+    def compute_weight(current_time):
+        return self.arrive_at - current_time
 
 def get_transfers_from_schedule(schedule):
     transfers_ll = schedule._transfers.values()
-    return [transfer for transfer_l in transfers_ll for transfer in transfer_l]
+    return [transfer for transfer_l in transfers_ll 
+                     for transfer in transfer_l]
 
 def build_edges_from_transfers(transfers, nodes):
-    return [ Edge(get_stop(nodes, transfer.from_stop_id),
-                  get_stop(nodes, transfer.to_stop_id),
-                  seconds_to_weird_time(transfer.min_transfer_time))
-            for transfer in transfers]
+    edges = []
+    for transfer in transfers:
+        origin      = get_stop(nodes, transfer.from_stop_id) 
+        destination = get_stop(nodes, transfer.to_stop_id) 
+        edge = Edge(origin, destination, ANYTIME, transfer.min_transfer_time)
+        edges.append(edge)
     
+    return edges
 
-def build_edges_from_trip(trip):
+def build_edges_from_trip(trip, nodes):
     stop_times = trip.GetStopTimes()
 
     edges = []
-    # stop_times seems to be sorted by sequence_num already
+    # stop_times is sorted by stop_sequence
     for i in range(len(stop_times) - 1):
-        time = stop_times[i]
-        next_time = stop_times[i+1]
+        stop_time = stop_times[i]
+        origin    = get_stop(nodes, stop_time.stop_id) 
+        depart_at = seconds_past_midnight(stop_time.departure_time)
 
-        edge = Edge(time, next_time)
+        next_stop_time  = stop_times[i+1]
+        destination     = get_stop(nodes, next_stop_time.stop_id)
+        arrive_at       = seconds_past_midnight(next_stop_time.arrival_time)
+
+        edge = Edge(origin, destination, depart_at, arrive_at)
         edges.append(edge)
 
     return edges
 
 def get_edges_with_schedule(schedule, nodes):
-    trips = [t for t in schedule.trips.values() if t.service_id in SERVICE_PERIODS]
-    edges_per_trip = [build_edges_from_trip(trip) for trip in trips]
+    trips = [trip for trip in schedule.trips.values() 
+                if trip.service_id in SERVICE_PERIODS]
 
-    trip_edges = [e for edges in edges_per_trip for e in edges]
+    edges_per_trip = [build_edges_from_trip(trip, nodes) for trip in trips]
 
-    transfer_edges = build_edges_from_transfers(get_transfers_from_schedule(schedule), nodes)
+    trip_edges = [edge for edges in edges_per_trip 
+                       for edge in edges]
+
+    transfers = get_transfers_from_schedule(schedule) 
+    transfer_edges = build_edges_from_transfers(transfers, nodes)
 
     return trip_edges + transfer_edges
-
-def get_edges_for_stop(all_edges, stop):
-    es = []
-    i = 0
-    while i < len(all_edges):
-        edge = all_edges[i]
-        if edge.origin.stop_id == stop.stop_id:
-            es.append(edge)
-            all_edges.pop(i)
-        else:
-            i+=1
-
-    time_map = {}
-    for edge in es:
-        if not edge.is_transfer:
-            time = edge.get_departure_time(None)
-        else:
-            time = ANYTIME
-        if time_map.has_key(time):
-            time_map[time] += [edge]
-        else:
-            time_map[time] = [edge]
-
-    return time_map
 
 def get_parent_stop_id(stop_id):
     if stop_id[-1] in ('N', 'S'):
         return stop_id[0:-1]
     else:
         return stop_id
-
-def getSchedule():
-    schedule = transitfeed.Schedule()
-    schedule.Load(DATA_FILENAME)
-    return schedule
 
 def dict_concat(d1, d2):
     d = {}
@@ -162,33 +123,43 @@ def remove_blacklisted(nodes):
                 'S31',]
     return [node for node in nodes if node.stop_id not in blacklist]
 
-def build_edge_index(stops, edges):
+def get_edges_for_stop(all_edges, stop):
+    return [edge for edge in all_edges if edge.origin.stop_id == stop.stop_id]
+
+def build_edge_index(stops, all_edges):
     stops_and_edges = {}
 
     for stop in stops:
-        parent_stop = get_parent_stop_id(stop.stop_id)
-        if stops_and_edges.has_key(parent_stop):
-            stops_and_edges[parent_stop] = dict_concat(stops_and_edges[parent_stop], get_edges_for_stop(edges, stop))
-        else:
-            stops_and_edges[parent_stop] = get_edges_for_stop(edges, stop)
+        edges   = get_edges_for_stop(all_edges, stop)
+        sorted_edges = sorted(edges, key=lambda edge: edge.depart_at)
+        stops_and_edges[stop.stop_id] = sorted_edges
 
-    print len(stops_and_edges)
     return stops_and_edges
 
-def isChildStop(stop):
-    return stop.stop_id[-1] in (u'N', u'S')
+def is_child_stop(stop):
+    return stop.stop_id[-1] in ('N', 'S')
+
+def load_schedule():
+    schedule = transitfeed.Schedule()
+    schedule.Load(DATA_FILENAME)
+    return schedule
+
+def get_nodes(schedule):
+    stops = schedule.stops.values()
+    nodes = [stop for stop in stops if not is_child_stop(stop) ]
+    return nodes
 
 def main():
-    s = getSchedule()
+    schedule = load_schedule()
+    nodes = get_nodes(schedule)
 
-    stops = s.stops.values()
-    edges = get_edges_with_schedule(s, stops)
-    stop_edge_map = build_edge_index(stops, edges)
-    nodes = [stop for stop in stops if not isChildStop(stop) ]
-    nodes = prune_stops(nodes, stop_edge_map)
-    nodes = remove_blacklisted(nodes)
+    edges = get_edges_with_schedule(schedule, nodes)
+    stop_edge_map = build_edge_index(nodes, edges)
 
-    return s, nodes, stop_edge_map
+    #nodes = prune_stops(nodes, stop_edge_map)
+    #nodes = remove_blacklisted(nodes)
+
+    return schedule, nodes, stop_edge_map
 
 def dijkstra(stop_ids, stop_edge_map, source, time):
     dist = {}
@@ -325,6 +296,7 @@ def benchmark():
     print("--- %s seconds ---" % (time.time() - start_time))
 
 def get_stop(stops, stop_id):
+    stop_id = get_parent_stop_id(stop_id)
     for stop in stops:
         if stop.stop_id == stop_id:
             return stop

@@ -89,20 +89,6 @@ def get_parent_stop_id(stop_id):
     else:
         return stop_id
 
-def dict_concat(d1, d2):
-    d = {}
-
-    for k1 in d1.keys():
-        d[k1] = d1[k1]
-
-    for k2 in d2.keys():
-        if d.has_key(k2):
-            d[k2] += d2[k2]
-        else:
-            d[k2] = d2[k2]
-
-    return d
-        
 def prune_stops(stops, edges):
     return [stop for stop in stops if edges.has_key(stop.stop_id) and len(edges[stop.stop_id]) > 0]
 
@@ -214,35 +200,6 @@ def dijkstra(stop_ids, stop_edge_map, source, source_arrive_time):
 
     return arrival_time, prev
         
-def path_to_nearest_unvisited_stop(nodes, stop_edge_map, visited, source, time):
-    min_unvisited = None
-    while not min_unvisited:
-        stop_ids = [node.stop_id for node in nodes]
-        dist, prev = dijkstra(stop_ids, stop_edge_map, source, time)
-
-        unvisited = [stop_id for stop_id in stop_ids if not stop_id in visited]
-        min_unvisited = unvisited[0]
-        min_dist = sys.maxint
-        for stop in unvisited:
-            if dist[stop] < min_dist:
-                min_unvisited = stop
-                min_dist = dist[stop]
-
-        if unvisited[0] == min_unvisited and prev[min_unvisited] == (None, None):
-            print "Could not find a path to stop " + min_unvisited + ".  Removing it."
-            nodes = [node for node in nodes if not node.stop_id == min_unvisited]
-            min_unvisited = None
-
-    curr = min_unvisited
-    path = [(curr, time)]
-    while not prev[curr][0] == source:
-        curr, time = prev[curr]
-        path.insert(0, (curr, time))
-
-    assert prev[path[0][0]][0] == source and path[-1][0] == min_unvisited
-        
-    return path
-
 def _dfs(node, stop_edge_map, visited):
     print node
     visited.append(node)
@@ -264,43 +221,55 @@ def dfs(nodes, stop_edge_map):
 
     return visited
 
-def nn(s, nodes, stop_edge_map):
+def path_to_nearest_unvisited_stop(nodes, stop_edge_map, visited, source, time):
+    stop_ids = [node.stop_id for node in nodes]
+    arrival_times, previous_stops = dijkstra(stop_ids, stop_edge_map,
+                                             source, time)
+
+    unvisited = [stop_id for stop_id in stop_ids if not stop_id in visited]
+    min_unvisited = unvisited[0]
+    min_arrival_time = sys.maxint
+    for stop in unvisited:
+        if arrival_times[stop] < min_arrival_time:
+            min_unvisited = stop
+            min_arrival_time = arrival_times[stop]
+
+    curr = min_unvisited
+    arrival_time = dist[curr]
+
+    path = [(curr, arrival_time)]
+    while not previous_stops[curr] == source:
+        curr = previous_stops[curr]
+        arrival_time = dist[curr]
+        path.insert(0, (curr, arrival_time))
+        
+    return path
+
+def nearest_neighbor(schedule, nodes, stop_edge_map):
+    time = seconds_past_midnight("00:00:00")
     current = nodes[0].stop_id
-    time = convert_time("00:00:00") # midnight
     visited = [current]
     path = [(current, time)]
 
     while (len(visited) < len(nodes)):
-        time_keyes = sorted(stop_edge_map[current], 
-                            key=lambda t: abs(time - t))
-        if len(time_keyes) == 0:
-            # Ryan, you copied this code from below and you should feel bad
+        current_edges = get_edges_after_time(stop_edge_map[current], time)
+
+        sorted_edges = sorted(current_edges, 
+                              key=lambda edge: edge.get_arrival_time(time))
+
+        unvisited_edges = [edge for edge in sorted_edges
+                                if not edge.destination.stop_id in visited]
+
+        if (len(unvisited_edges) > 0):
+            shortest_edge = unvisited_edges[0]
+            current = shortest_edge.destination.stop_id
+            time = shortest_edge.get_arrival_time(time)
+        else:
             path_to_nearest = path_to_nearest_unvisited_stop(nodes,
                                  stop_edge_map, visited, 
                                  current, time)
             current, time = path_to_nearest.pop()
             path += path_to_nearest
-        else:
-            time_key = time_keyes[0]
-            current_edges = stop_edge_map[current][time_key]
-            if stop_edge_map[current].has_key(ANYTIME):
-                current_edges += stop_edge_map[current][ANYTIME]
- 
-            sorted_edges = sorted(current_edges, key=lambda edge: edge.weight)
-
-            unvisited_edges = [edge for edge in sorted_edges
-                if not get_parent_stop_id(edge.destination.stop_id) in visited]
-
-            if (len(unvisited_edges) > 0):
-                shortest_edge = unvisited_edges[0]
-                current = get_parent_stop_id(shortest_edge.destination.stop_id)
-                time = shortest_edge.get_arrival_time(time)
-            else:
-                path_to_nearest = path_to_nearest_unvisited_stop(nodes,
-                                     stop_edge_map, visited, 
-                                     current, time)
-                current, time = path_to_nearest.pop()
-                path += path_to_nearest
 
         visited.append(current)
         path.append((current, time))

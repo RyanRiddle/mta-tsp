@@ -263,7 +263,7 @@ def path_to_nearest_unvisited_stop(node_map, stop_edge_map, visited, source, tim
         
     return path
 
-def nearest_neighbor(schedule, node_map, stop_edge_map):
+def nearest_neighbor(node_map, stop_edge_map):
     time = seconds_past_midnight("09:00:00")
     current = node_map.keys()[-1]
     visited = [current]

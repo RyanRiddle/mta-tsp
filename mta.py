@@ -18,6 +18,14 @@ def seconds_past_midnight(time_string):
     return reduce(lambda a, b: a + b, 
                     [a * b for a, b in zip(time_parts, seconds_per_part)])
 
+def to_time_string(seconds):
+    h = seconds // 3600
+    m = (seconds % 3600) / 60
+    s = (seconds % 3600) % 60
+
+    time = str(h) + ":" + str(m) + ":" + str(s)
+    return time
+
 class Edge(object):
     def __init__(self, origin, destination, depart_at, arrive_at):
         self.origin = origin
@@ -256,7 +264,7 @@ def path_to_nearest_unvisited_stop(node_map, stop_edge_map, visited, source, tim
     return path
 
 def nearest_neighbor(schedule, node_map, stop_edge_map):
-    time = seconds_past_midnight("00:00:00")
+    time = seconds_past_midnight("09:00:00")
     current = node_map.keys()[-1]
     visited = [current]
     path = [(current, time)]

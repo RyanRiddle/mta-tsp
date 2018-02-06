@@ -1,5 +1,6 @@
 import sys
 import heapq
+import json
 import transitfeed
 
 DATA_FILENAME = './data/google_transit.zip'
@@ -153,8 +154,8 @@ def load_schedule():
     return schedule
 
 def get_nodes(schedule):
-    return {k: v for k, v in schedule.stops.iteritems()
-                    if not is_child_stop(k)}
+    return {stop_id: stop for stop_id, stop in schedule.stops.iteritems()
+                    if not is_child_stop(stop_id)}
 
 def main():
     schedule = load_schedule()
@@ -263,9 +264,9 @@ def path_to_nearest_unvisited_stop(node_map, stop_edge_map, visited, source, tim
         
     return path
 
-def nearest_neighbor(node_map, stop_edge_map):
+def nearest_neighbor(node_map, stop_edge_map, start=None):
     time = seconds_past_midnight("09:00:00")
-    current = node_map.keys()[-1]
+    current = start or node_map.keys()[-1]
     visited = [current]
     path = [(current, time)]
 
@@ -301,22 +302,21 @@ def benchmark():
     nn(s, node_map, stop_edge_map) 
     print("--- %s seconds ---" % (time.time() - start_time))
 
-def visualize(node_map, path, old_schedule):
-    new_schedule = transitfeed.Schedule()
-    path = set(path)
-    for stop in path:
-        stop = node_map[stop]
-        stop._schedule = None
-        new_schedule.AddStopObject(stop)
+def visualize(node_map, path):
+    f = open("coords.json", "w")
 
-    new_schedule.WriteGoogleTransitFeed("nn_path.zip")
+    coords = []
+    for stop_id, _ in path:
+        stop = node_map[stop_id]
+        lat = stop.stop_lat
+        lng = stop.stop_lon
+        coords.append({"lat": lat, "lng": lng})
+    json.dump(coords, f)
 
-    for stop in path:
-        stop = node_map[stop]
-        stop._schedule = old_schedule
-    
+    f.close()
+
 if __name__ == '__main__':
-    s, node_map, stop_edge_map = main()
-    path = nn(s, node_map, stop_edge_map)
+    schedule, node_map, stop_edge_map = main()
+    path = nearest_neighbor(node_map, stop_edge_map)
 
-    visualize(node_map, path, s)
+    visualize(node_map, path)
